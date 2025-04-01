@@ -1,166 +1,76 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 
 
-def polar2(*args):
+def polar2(theta, rho, r=None, line_style='auto', ax=None):
     """
-    POLAR  Polar coordinate plot.
-    POLAR(THETA, RHO) makes a plot using polar coordinates of
-    the angle THETA (in radians) versus the radius RHO.
-    POLAR(THETA,RHO,R) uses radial limits specified by R.
-    POLAR(THETA,RHO,S) uses linestyle specified in S.
-    POLAR(THETA,RHO,R,S) combines radial limits and linestyle.
-    POLAR(AX,...) plots into AX instead of GCA.
-    H = POLAR(...) returns a handle to the plotted object.
+    创建极坐标图。
+
+    参数:
+    - theta: array-like，角度（弧度）。
+    - rho: array-like，与每个角度对应的半径。
+    - r: list 或 None，径向和角度范围 [rmin, rmax, thmin, thmax]。
+    - line_style: str，绘图的线型。
+    - ax: matplotlib.axes.Axes，可选，绘图的坐标轴。
+
+    返回:
+    - hpol: matplotlib.lines.Line2D，绘制的线对象。
     """
-    # Parse possible Axes input
-    cax = plt.gca()
-    args = list(args)
-    nargs = len(args)
+    if ax is None:
+        ax = plt.gca(projection='polar')  # 获取当前的极坐标轴或创建新的极坐标轴
 
-    if nargs < 1 or nargs > 4:
-        raise ValueError('Requires 2 to 4 data arguments.')
-
-    if nargs == 2:
-        theta, rho = args
-        if isinstance(rho, str):
-            line_style = rho
-            rho = theta
-            mr, nr = rho.shape
-            if mr == 1:
-                theta = np.arange(1, nr + 1)
-            else:
-                th = np.arange(1, mr + 1).reshape(-1, 1)
-                theta = np.tile(th, (1, nr))
-        else:
-            line_style = 'auto'
-        radial_limits = []
-    elif nargs == 1:
-        theta = args[0]
-        line_style = 'auto'
-        rho = theta
-        mr, nr = rho.shape
-        if mr == 1:
-            theta = np.arange(1, nr + 1)
-        else:
-            th = np.arange(1, mr + 1).reshape(-1, 1)
-            theta = np.tile(th, (1, nr))
-        radial_limits = []
-    elif nargs == 3:
-        if isinstance(args[2], str):
-            theta, rho, line_style = args
-            radial_limits = []
-        else:
-            theta, rho, radial_limits = args
-            line_style = 'auto'
-            if len(radial_limits) == 2:
-                radial_limits = np.concatenate([radial_limits, [0, 2 * np.pi]])
-            elif len(radial_limits) != 4:
-                raise ValueError('R must be a 2 or 4 element vector')
-    else:  # nargs == 4
-        theta, rho, radial_limits, line_style = args
-        if len(radial_limits) == 2:
-            radial_limits = np.concatenate([radial_limits, [0, 2 * np.pi]])
-        elif len(radial_limits) != 4:
-            raise ValueError('R must be a 2 or 4 element vector')
-
+    # 验证输入
     if isinstance(theta, str) or isinstance(rho, str):
-        raise TypeError('Input arguments must be numeric.')
-
+        raise ValueError("输入参数必须为数值类型。")
     if theta.shape != rho.shape:
-        raise ValueError('THETA and RHO must be the same size.')
+        raise ValueError("THETA 和 RHO 的大小必须相同。")
 
-    # Get hold state
-    next_plot = plt.rcParams['axes.hold']
-    hold_state = plt.isinteractive()
-
-    # Get x-axis text color so grid is in same color
-    tc = plt.rcParams['axes.edgecolor']
-    ls = plt.rcParams['grid.linestyle']
-
-    # Hold on to current Text defaults
-    fAngle = plt.rcParams['font.angle']
-    fName = plt.rcParams['font.family']
-    fSize = plt.rcParams['font.size']
-    fWeight = plt.rcParams['font.weight']
-    fUnits = plt.rcParams['font.units']
-
-    plt.rcParams['font.angle'] = 'normal'
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.size'] = 10
-    plt.rcParams['font.weight'] = 'normal'
-    plt.rcParams['font.units'] = 'points'
-
-    # Make a radial grid
-    if not hold_state:
-        plt.hold(True)
-        ax = plt.gca()
-        ax.set_aspect('equal', adjustable='box')
-
-        # Calculate radial limits
-        if len(radial_limits) == 0:
-            arho = np.abs(rho.flatten())
-            arho = arvo[np.isfinite(arho)]
-            maxrho = np.max(arho) if len(arho) > 0 else 1
-            minrho = 0
+    # 处理径向范围
+    if r is not None:
+        if len(r) == 2:
+            rmin, rmax = r
+            thmin, thmax = 0, 2 * np.pi
+        elif len(r) == 4:
+            rmin, rmax, thmin, thmax = r
         else:
-            rmin, rmax, thmin, thmax = radial_limits
-
-        # Draw radial circles
-        th = np.linspace(0, 2 * np.pi, 100)
-        xunit = np.cos(th)
-        yunit = np.sin(th)
-
-        # Plot background
-        if plt.rcParams['axes.facecolor'] != 'none':
-            plt.fill(xunit * (rmax - rmin), yunit * (rmax - rmin), color=plt.rcParams['axes.facecolor'])
-
-        # Draw radial lines
-        for i in np.arange(rmin + rinc, rmax + rinc, rinc):
-            plt.plot(xunit * (i - rmin), yunit * (i - rmin), ls=ls, color=tc, lw=1)
-            plt.text((i - rmin + rinc / 20) * np.cos(np.pi / 180 * 82),
-                     (i - rmin + rinc / 20) * np.sin(np.pi / 180 * 82),
-                     f'  {i}', va='bottom')
-
-        # Plot spokes
-        th = np.linspace(0, 2 * np.pi, 12, endpoint=False)
-        cst = np.cos(th)
-        snt = np.sin(th)
-        plt.plot((rmax - rmin) * np.r_[-cst, cst], (rmax - rmin) * np.r_[-snt, snt],
-                 ls=ls, color=tc, lw=1)
-
-        # Annotate spokes
-        rt = 1.1 * (rmax - rmin)
-        for i, angle in enumerate(th):
-            plt.text(rt * np.cos(angle), rt * np.sin(angle), f'{int(np.degrees(angle))}', ha='center')
-            plt.text(-rt * np.cos(angle), -rt * np.sin(angle), f'{int(np.degrees(angle + np.pi))}', ha='center')
-
-        plt.xlim(-(rmax - rmin), (rmax - rmin))
-        plt.ylim(-1.15 * (rmax - rmin), 1.15 * (rmax - rmin))
+            raise ValueError("R 必须是长度为 2 或 4 的数组。")
     else:
-        rmin = plt.gca().get_xlim()[0] if hasattr(plt.gca(), '_rMin') else 0
+        rmin, rmax = 0, np.max(np.abs(rho))
+        thmin, thmax = 0, 2 * np.pi
 
-    # Reset font defaults
-    plt.rcParams['font.angle'] = fAngle
-    plt.rcParams['font.family'] = fName
-    plt.rcParams['font.size'] = fSize
-    plt.rcParams['font.weight'] = fWeight
-    plt.rcParams['font.units'] = fUnits
+    # 根据范围筛选数据
+    subset = (rho >= rmin) & (rho <= rmax) & (theta >= thmin) & (theta <= thmax)
+    theta, rho = theta[subset], rho[subset]
 
-    # Transform data to Cartesian coordinates
-    xx = (rho - rmin) * np.cos(theta)
-    yy = (rho - rmin) * np.sin(theta)
+    # 绘制网格和背景（如果需要）
+    ax.grid(True)
+    ax.set_facecolor(ax.get_xcolor())  # 将背景颜色匹配为 x 轴文本颜色
 
-    # Plot data
+    # 设置角度刻度
+    ax.set_xticks(np.arange(0, 2 * np.pi, np.pi / 6))
+    ax.set_xticklabels([f'{int(i * 30)}' for i in range(12)])
+
+    # 设置径向刻度
+    radial_ticks = np.arange(rmin, rmax, (rmax - rmin) / 5)
+    ax.set_rticks(radial_ticks)
+    ax.set_rlabel_position(-22.5)  # 设置径向标签的位置
+
+    # 绘制数据
     if line_style == 'auto':
-        q, = plt.plot(xx, yy)
+        hpol = ax.plot(theta, rho - rmin)  # 在极坐标轴上绘制数据
     else:
-        q, = plt.plot(xx, yy, line_style)
+        hpol = ax.plot(theta, rho - rmin, line_style)
 
-    if not hold_state:
-        plt.axis('off')
-        plt.xlabel('')
-        plt.ylabel('')
+    # 设置绘图范围
+    ax.set_ylim(rmin - (rmax - rmin) * 0.15, rmax + (rmax - rmin) * 0.15)
 
-    return q
+    plt.show()
+
+    return hpol[0]
+
+'''
+# 示例用法
+if __name__ == "__main__":
+    t = np.linspace(0, 2 * np.pi, 100)
+    polar2(t, np.sin(2 * t) * np.cos(2 * t), line_style='--r')
+'''

@@ -45,7 +45,6 @@ def calculate_confidence_interval(sampledata, a, method):
 
     return ci
 
-
 '''
 # 使用示例
 if __name__ == "__main__":
@@ -54,8 +53,8 @@ if __name__ == "__main__":
     sample_data = np.random.normal(loc=50, scale=10, size=100)  # 正态分布样本
 
     # 计算95%置信区间（两种方法）
-    ci_zscore = calculate_confidence_interval(sample_data, alpha=0.05, method='z-score')
-    ci_mc = calculate_confidence_interval(sample_data, alpha=0.05, method='mc')
+    ci_zscore = calculate_confidence_interval(sample_data, a=0.05, method='z-score')
+    ci_mc = calculate_confidence_interval(sample_data, a=0.05, method='mc')
 
     print(f"Z-score方法 95%置信区间: [{ci_zscore[0]:.2f}, {ci_zscore[1]:.2f}]")
     print(f"蒙特卡洛方法 95%置信区间: [{ci_mc[0]:.2f}, {ci_mc[1]:.2f}]")

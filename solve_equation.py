@@ -1,172 +1,182 @@
 import numpy as np
-from scipy.linalg import lstsq, eig
-from numpy.random import rand, normal
-from math import atan, asin, acos, sqrt, cos, sin, pi, degrees
+from scipy.linalg import eig
+from numpy.linalg import pinv
 
 
 def solve_equation(A2, N0, rg, Tr, Cr, CZWfangweijiao, Nmc):
     """
-    主计算函数
-    参数：
-        A2: 测试数据矩阵（二维数组）
-        N0: 测试段数
-        rg: 岩石重度
-        Tr: 抗拉强度范围[Tmin, Tmax]
-        Cr: 抗压强度范围[Cmin, Cmax]
-        CZWfangweijiao: 参照物方位角（度）
-        Nmc: 蒙特卡洛循环次数
-    返回：
-        sigma_utc, sigma_ucc, sigma_uvc: 三个结果矩阵
-    """
-    # 计算垂直应力
-    sigmaV1 = (A2[np.nonzero(A2[:, 0])[0][0], 0] * 9.8 * rg) / 1000
+     主计算函数
+     参数：
+         A2: 测试数据矩阵（二维数组）
+         N0: 测试段数
+         rg: 岩石重度
+         Tr: 抗拉强度范围[Tmin, Tmax]
+         Cr: 抗压强度范围[Cmin, Cmax]
+         CZWfangweijiao: 参照物方位角（度）
+         Nmc: 蒙特卡洛循环次数
+     返回：
+         sigma_utc, sigma_ucc, sigma_uvc: 三个结果矩阵
+     """
+    # print(f"输入参数-------A2:{A2}, N0:{N0}, rg:{rg}, Tr:{Tr}, Cr:{Cr}, CZW:{CZWfangweijiao}, Nmc:{Nmc}")
+
+    # 初始化结果列表
+    sigma_utc = [0]
+    sigma_ucc = [0]
+    sigma_uvc = [0]
+
+    # 参照物方位角（弧度）
+    bet0 = CZWfangweijiao * np.pi / 180
+
+    # 岩石重度和抗拉、抗压强度
+    sigmaV1 = (np.min(A2[A2[:, 0] != 0, 0]) * 9.8 * rg) / 1000
     sigmaV2 = (np.max(A2[:, 0]) * 9.8 * rg) / 1000
+    # print(f"sigmaV1={sigmaV1}, sigmaV2={sigmaV2}")
 
-    bet0 = np.deg2rad(CZWfangweijiao)  # 参照物方位角（弧度）
-    Dip = np.deg2rad(A2[:, 2])  # 倾角（弧度）
-    Strike = np.deg2rad(A2[:, 3])  # 走向（弧度）
+    parfor = range(Nmc)  # Python 中没有直接的 parfor，可以用多线程或 multiprocessing 替代
+    # print("parfor =", parfor)
 
-    sigma_utc = np.empty((0, 22))  # 预分配内存
-    sigma_ucc = np.empty((0, 22))
-    sigma_uvc = np.empty((0, 22))
+    for Num in parfor:
+        # print(f"-------------------------------Num:{Num}---------------------------------")
+        # 随机生成抗拉和抗压强度
+        T0 = Tr[0] + (Tr[1] - Tr[0]) * np.random.rand()
+        C0 = Cr[0] + (Cr[1] - Cr[0]) * np.random.rand()
 
-    # 并行循环（这里使用简单循环，实际可改用joblib或multiprocessing）
-    for Num in range(Nmc):
-        # 随机生成参数
-        T0 = Tr[0] + (Tr[1] - Tr[0]) * rand()
-        C0 = Cr[0] + (Cr[1] - Cr[0]) * rand()
+        b1 = np.zeros((3 * (N0 - 1) + 1, 7))
+        mu = np.random.normal(0.4, 0.11, N0)
 
-        # 初始化矩阵
-        # 原错误行
-        # b1 = np.zeros((3 * (N0 - 1) + 1, 7))
-        # 修改后
-        b1 = np.zeros((3 * N0, 7))  # 确保每个测试段有3行存储空间
+        # print(f"T0:{T0}, C0:{C0}, b1:{b1}, mu:{mu}")
 
         for i in range(N0):
-            # 生成mu值（根据文件名不同有两种分布）
-            # solve_equation.m 使用正态分布
-            mu_i = normal(0.4, 0.11)
-            # solve_equation0.m 使用均匀分布（取消下方注释切换）
-            # mu_i = 0.1 + 0.75 * rand()
-
-            al = Dip[i]
-            betai = Strike[i]
+            # print(f"---------------------i={i}----------------------")
+            al = A2[i, 2] * np.pi / 180  # 倾角
+            betai = A2[i, 3] * np.pi / 180  # 方位角
             bet = bet0 - betai
+            # print(f"----------al={al}, betai={betai}, bet0={bet0}, bet={bet}")
 
-            k = 3 * i
-            # 填充矩阵b1（具体公式与原文一致）
-            b1[k, :] = [sin(bet) ** 2 * sin(al) ** 2, cos(bet) ** 2 * sin(al) ** 2, cos(al) ** 2,
-                        -sin(2 * bet) * sin(al) ** 2, cos(bet) * sin(2 * al), -sin(bet) * sin(2 * al),
-                        A2[i, 1]]
+            k = 3 * (i - 1)
+            b1[k, 0] = np.sin(bet) ** 2 * np.sin(al) ** 2
+            b1[k, 1] = np.cos(bet) ** 2 * np.sin(al) ** 2
+            b1[k, 2] = np.cos(al) ** 2
+            b1[k, 3] = -np.sin(2 * bet) * np.sin(al) ** 2
+            b1[k, 4] = np.cos(bet) * np.sin(2 * al)
+            b1[k, 5] = -np.sin(bet) * np.sin(2 * al)
+            b1[k, 6] = A2[i, 1]
+            # print(f"----------k={k}, b1[k]={b1[k]}")
 
-            b1[k + 1, :] = [-0.5 * sin(2 * bet) * sin(al), 0.5 * sin(2 * bet) * sin(al), 0,
-                            cos(2 * bet) * sin(al), sin(bet) * cos(al), cos(bet) * cos(al),
-                            A2[i, 1] * mu_i]
+            k += 1
+            b1[k, 0] = -0.5 * np.sin(2 * bet) * np.sin(al)
+            b1[k, 1] = 0.5 * np.sin(2 * bet) * np.sin(al)
+            b1[k, 2] = 0
+            b1[k, 3] = np.cos(2 * bet) * np.sin(al)
+            b1[k, 4] = np.sin(bet) * np.cos(al)
+            b1[k, 5] = np.cos(bet) * np.cos(al)
+            b1[k, 6] = A2[i, 1] * mu[i]
+            # print(f"----------k={k}, b1[k]={b1[k]}")
 
-            b1[k + 2, :] = [0, 0, 0, 0, 0, 0, 0]
+            k += 1
+            b1[k, :] = 0
+            # print(f"----------k={k}, b1[k]={b1[k]}")
 
-        # 构建方程组矩阵
-        MATRIX1 = b1[:, :6]
-        MATRIX2 = b1[:, 6].reshape(-1, 1)
-
-        # 最小二乘法求解
-        result1, _, _, _ = lstsq(MATRIX1, MATRIX2, cond=None)
+        # 矩阵求解
+        MATRIX1 = b1[:, :-1]
+        MATRIX2 = b1[:, -1].reshape(-1, 1)
+        result1 = pinv(MATRIX1) @ MATRIX2
         result2 = result1.flatten()
+        # print(f"MATRIX1={MATRIX1}")
+        # print(f"MATRIX2={MATRIX2}")
+        # print(f"result1={result1}")
+        # print(f"result2={result2}")
 
-        # 构建应力张量矩阵
-        ST = np.array([[result2[0], result2[3], result2[5]],
-                       [result2[3], result2[1], result2[4]],
-                       [result2[5], result2[4], result2[2]]])
+        ST = np.array([
+            [result2[0], result2[3], result2[5]],
+            [result2[3], result2[1], result2[4]],
+            [result2[5], result2[4], result2[2]]
+        ])
+        # print(ST)
 
-        '''
-        # 添加调试代码：打印矩阵维度
-        print(f"ST矩阵维度: {ST.shape}")
-        print(f"ST矩阵内容:\n{ST}")
-        '''
+        eigvals, eigvecs = eig(ST)
+        Vrot = np.rot90(eigvecs)
+        Drot = np.rot90(np.diag(eigvals.real), k=2)
+        # print(f"eigvals={eigvals}, eigvecs={eigvecs}, Vrot={Vrot}, Drot={Drot}")
 
-        # 特征值分解
-        eigenvalues, eigenvectors = eig(ST)
-        V = eigenvectors
-
-        # 强制转换为实数（当虚部足够小时）
-        if np.max(np.abs(np.imag(eigenvalues))) < 1e-6:
-            eigenvalues = np.real(eigenvalues)
-
-        D = np.diag(eigenvalues)
-        # print("D:", D)
-
-        # 坐标旋转处理
-        Vrot = np.rot90(V, k=1)
-        Drot = np.rot90(D, k=2)
-
-        # 计算主应力方向
         bta = np.zeros(3)
         arf = np.zeros(3)
         val1 = np.zeros(3)
 
         for i in range(3):
-            # 计算方位角（具体公式与原文一致）
-            bta[i] = degrees(acos(Vrot[i, 0] / sqrt(Vrot[i, 0] ** 2 + Vrot[i, 1] ** 2)))
-            if cos(np.deg2rad(bta[i])) * Vrot[i, 0] > 0 and sin(np.deg2rad(bta[i])) * Vrot[i, 1] > 0:
-                bta[i] = 90 - bta[i]
-            else:
-                bta[i] = 270 - bta[i]
+            bta[i] = np.degrees(np.arctan2(Vrot[i, 1], Vrot[i, 0]))
+            if Vrot[i, 0] * np.cos(np.deg2rad(bta[i])) + Vrot[i, 1] * np.sin(np.deg2rad(bta[i])) < 0:
+                bta[i] += 180
 
-            # 计算倾角
-            arf[i] = degrees(asin(Vrot[i, 2]))
-            if arf[i] < 0:
+            arf[i] = np.degrees(np.arcsin(Vrot[i, 2]))
+            if Vrot[i, 2] < 0:
                 arf[i] = -arf[i]
                 bta[i] += 180
 
-            # 确保方位角在0-360度之间
-            bta[i] %= 360
-            val1[i] = Drot[i, i]
+            val1[i] = Drot[i, i].real
+            # print(f"val1[{i}]={val1[i]}")
+        # print(f"val1={val1}")
 
-        # 计算平面最大最小应力
-        SHmax = (result2[0] + result2[1]) / 2 + sqrt(((result2[0] - result2[1]) / 2) ** 2 + result2[3] ** 2)
-        Shmin = (result2[0] + result2[1]) / 2 - sqrt(((result2[0] - result2[1]) / 2) ** 2 + result2[3] ** 2)
+        # 计算最大最小主应力
+        SHmax = (result2[0] + result2[1]) / 2 + np.sqrt(((result2[0] - result2[1]) / 2) ** 2 + result2[3] ** 2)
+        Shmin = (result2[0] + result2[1]) / 2 - np.sqrt(((result2[0] - result2[1]) / 2) ** 2 + result2[3] ** 2)
+        # print(f"SHmax={SHmax}, SHmin={Shmin}")
 
-        # 主应力方向计算（具体公式与原文一致）
         if result2[0] == result2[1]:
-            betaSHmax = 45
+            twoD1 = 90
+            twoD2 = 270
         else:
             tan2D = -2 * result2[3] / (result2[0] - result2[1])
-            twoD1 = degrees(atan(tan2D))
-            betaSHmax = twoD1 / 2 if abs(SHmax - ((result2[0] + result2[1]) / 2 -
-                                                  (result2[0] - result2[1]) / 2 * cos(np.deg2rad(twoD1)) +
-                                                  result2[3] * sin(np.deg2rad(twoD1)))) < \
-                                     abs(SHmax - ((result2[0] + result2[1]) / 2 -
-                                                  (result2[0] - result2[1]) / 2 * cos(np.deg2rad(twoD1 + 180)) +
-                                                  result2[3] * sin(np.deg2rad(twoD1 + 180)))) else twoD1 / 2 + 90
-            betaSHmax %= 180
+            twoD1 = np.degrees(np.arctan(tan2D))
+            twoD2 = twoD1 + 180
 
-        # 抗拉强度条件判断
-        if (val1[0] > val1[1] > val1[2] > 0) and (SHmax - 3 * Shmin < T0):
-            temp = np.hstack((result2, val1, arf, bta, SHmax, Shmin, betaSHmax, mu_i))
-            sigma_utc = np.vstack((sigma_utc, temp))
+        D2D1 = (result2[0] + result2[1]) / 2 - (result2[0] - result2[1]) / 2 * np.cos(np.deg2rad(twoD1)) + result2[
+            3] * np.sin(np.deg2rad(twoD1))
+        D2D2 = (result2[0] + result2[1]) / 2 - (result2[0] - result2[1]) / 2 * np.cos(np.deg2rad(twoD2)) + result2[
+            3] * np.sin(np.deg2rad(twoD2))
 
-        # 抗压强度条件判断
-        if (val1[0] > val1[1] > val1[2] > 0) and (3 * SHmax - Shmin < C0):
-            temp = np.hstack((result2, val1, arf, bta, SHmax, Shmin, betaSHmax, mu_i))
-            sigma_ucc = np.vstack((sigma_ucc, temp))
+        if abs(SHmax - D2D1) < abs(SHmax - D2D2):
+            betaSHmax = twoD1 / 2
+        else:
+            betaSHmax = twoD2 / 2
 
-        # 联合条件判断
-        if (val1[0] > val1[1] > val1[2] > 0) and (SHmax - 3 * Shmin < T0) and \
-                ((arf[0] < 25 and 0.8 < abs(val1[0]) / sigmaV2 < 1.2) or
-                 (abs(arf[1]) > 65 and 0.8 < abs(val1[1]) / sigmaV1 < 1.2) or
-                 (abs(arf[2]) > 65 and 0.8 < abs(val1[2]) / sigmaV1 < 1.2)):
-            temp = np.hstack((result2, val1, arf, bta, SHmax, Shmin, betaSHmax, mu_i))
-            sigma_uvc = np.vstack((sigma_uvc, temp))
+        if betaSHmax < 0:
+            betaSHmax += 180
+        elif betaSHmax > 180:
+            betaSHmax -= 180
 
+        # 应力判别
+        sigma1, sigma2, sigma3 = sorted(val1, reverse=True)
+        Alph1, Alph2, Alph3 = sorted(arf, reverse=True)
+        Beta1, Beta2, Beta3 = sorted(bta, reverse=True)
+        # print(f"sigma1={sigma1}, sigma2={sigma2}, sigma3={sigma3}")
+        # print(f"Alph1={Alph1}, Alph2={Alph2}, Alph3={Alph3}")
+        # print(f"Beta1={Beta1}, Beta2={Beta2}, Beta3={Beta3}")
+
+        conditions_met = (
+                (sigma1 > sigma2 > sigma3 > 0) and
+                (SHmax - 3 * Shmin < T0) and
+                ((Alph1 < 25 and (abs(sigma1) / sigmaV2 > 0.8 and abs(sigma1) / sigmaV2 < 1.2)) or
+                 (abs(Alph2) > 65 and (abs(sigma2) / sigmaV1 > 0.8 and abs(sigma2) / sigmaV1 < 1.2)) or
+                 (abs(Alph3) > 65 and (abs(sigma3) / sigmaV1 > 0.8 and abs(sigma3) / sigmaV1 < 1.2)))
+        )
+        # print(f"conditions_met={conditions_met}")
+
+        if conditions_met:
+            temp = np.concatenate(([result2],
+                                   [sigma1, Alph1, Beta1, sigma2, Alph2, Beta2, sigma3, Alph3, Beta3, SHmax, Shmin,
+                                    betaSHmax, mu]))
+            sigma_utc.append(temp)
+        # print(f"sigma_utc={sigma_utc}")
     return sigma_utc, sigma_ucc, sigma_uvc
 
+
 '''
-# 使用示例
+# 示例用法
+# A2, N0, rg, Tr, Cr, CZWfangweijiao, N
 if __name__ == "__main__":
     # 生成示例输入数据（需根据实际需求调整）
-    A2 = np.array([[100, 50, 30, 45],
-                   [200, 60, 40, 60],
-                   [150, 55, 35, 50]])
+    A2 = np.array([[150, 60, 45, 60], [200, 70, 50, 75]])
     N0 = 2
     rg = 2.7  # 岩石重度示例值
     Tr = [5, 10]  # 抗拉强度范围
@@ -178,9 +188,9 @@ if __name__ == "__main__":
     utc, ucc, uvc = solve_equation(A2, N0, rg, Tr, Cr, CZWfangweijiao, Nmc)
 
     # 打印结果摘要
-    print(f"UTC结果形状: {utc.shape}")
-    print(f"UCC结果形状: {ucc.shape}")
-    print(f"UVC结果形状: {uvc.shape}")
+    print(f"UTC结果: {utc}")
+    print(f"UCC结果: {ucc}")
+    print(f"UVC结果: {uvc}")
     print("\n前5行UTC结果示例:")
     print(utc[:5])
 '''

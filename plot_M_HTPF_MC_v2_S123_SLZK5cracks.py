@@ -48,7 +48,10 @@ def plot_histograms(sigma_data, filename_prefix, title):
     plt.savefig(f'./DataMC_SLZK/{filename_prefix}_v2.fig')
     plt.close()
 
-# 示例调用（需加载sigma_ucc5等实际数据）
-# plot_histograms(sigma_ucc5, 'M_HTPF_MC_SLZK_5cracks_ucc', 'UCS Control')
-# plot_histograms(sigma_utc5, 'M_HTPF_MC_SLZK_5cracks_utc', 'T Control')
-# plot_histograms(sigma_uvc5, 'M_HTPF_MC_SLZK_5cracks_uvc', 'T0 & S_v Control')
+
+'''
+示例调用（需加载sigma_ucc5等实际数据）
+plot_histograms(sigma_ucc5, 'M_HTPF_MC_SLZK_5cracks_ucc', 'UCS Control')
+plot_histograms(sigma_utc5, 'M_HTPF_MC_SLZK_5cracks_utc', 'T Control')
+plot_histograms(sigma_uvc5, 'M_HTPF_MC_SLZK_5cracks_uvc', 'T0 & S_v Control')
+'''
